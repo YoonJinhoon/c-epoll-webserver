@@ -1,0 +1,7 @@
+build/
+*.o
+*.d
+/webserver
+/tests/bin/
+.vscode/
+__pycache__/

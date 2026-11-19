@@ -1,0 +1,7 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gdb valgrind make git curl ca-certificates \
+        python3 apache2-utils \
+    && rm -rf /var/lib/apt/lists/*

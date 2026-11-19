@@ -1,0 +1,10 @@
+{
+  "name": "jungle-team9-webserver",
+  "build": { "dockerfile": "Dockerfile" },
+  "forwardPorts": [8080],
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-vscode.cpptools", "ms-vscode.makefile-tools"]
+    }
+  }
+}
