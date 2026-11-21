@@ -3,5 +3,6 @@ build/
 *.d
 /webserver
 /tests/bin/
+/experiments/*/server
 .vscode/
 __pycache__/
