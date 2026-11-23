@@ -27,7 +27,8 @@ if curl -s --max-time 1 "localhost:$PORT" > /dev/null 2>&1 || nc -z localhost "$
 fi
 
 # 터미널 A 역할: 서버 켜기 (로그는 버림)
-"$SERVER" > /dev/null 2>&1 &
+#   인자: 포트, 정적 파일 폴더 (src/ 의 webserver 용. 실험 서버들은 인자를 무시한다)
+"$SERVER" "$PORT" www > /dev/null 2>&1 &
 SERVER_PID=$!
 sleep 0.3      # 서버가 listen 할 때까지 잠깐 기다림
 

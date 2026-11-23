@@ -14,6 +14,9 @@
 
 | 11/23 | 연결-3 | (epoll, 스레드 1개) 느린 클라이언트 2개여도 PASS — 데이터가 온 fd만 골라서 read하니까 | 손으로 A/B1/B2/C → `bash tests/test_slow_client.sh experiments/04-epoll/server 2` | 로그에 `⏰ fd 7에 요청 데이터 도착`만 있고 fd 5·6은 없음 / `PASS ✅` (예측과 일치) | 진훈 |
 
+| 11/23 | HTTP-2 | 요청을 두 조각으로 보낼 때, 첫 조각만 보낸 시점엔 응답이 없고 빈 줄까지 보낸 뒤 응답이 온다 | `bash tests/test_split_request.sh <서버>` | S1 `./webserver`: `PASS ✅` / 실험 04: `FAIL ❌ 첫 조각만 보냈는데 응답이 옴` (예측: 둘 다 PASS → 04는 틀림. 이유: 04는 \r\n\r\n을 찾지 않고 read 한 번에 응답) | 진훈 |
+| 11/23 | HTTP-2 | request_head_end가 머리 끝을 맞게 찾는다 (조각, \n만, 본문 붙음 등 7경우) | `make test` (tests/test_request.c) | 7개 PASS | Claude (진훈 미확인) |
+
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
 |---|---|---|
