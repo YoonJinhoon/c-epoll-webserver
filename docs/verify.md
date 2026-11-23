@@ -17,6 +17,10 @@
 | 11/23 | HTTP-2 | 요청을 두 조각으로 보낼 때, 첫 조각만 보낸 시점엔 응답이 없고 빈 줄까지 보낸 뒤 응답이 온다 | `bash tests/test_split_request.sh <서버>` | S1 `./webserver`: `PASS ✅` / 실험 04: `FAIL ❌ 첫 조각만 보냈는데 응답이 옴` (예측: 둘 다 PASS → 04는 틀림. 이유: 04는 \r\n\r\n을 찾지 않고 read 한 번에 응답) | 진훈 |
 | 11/23 | HTTP-2 | request_head_end가 머리 끝을 맞게 찾는다 (조각, \n만, 본문 붙음 등 7경우) | `make test` (tests/test_request.c) | 7개 PASS | Claude (진훈 미확인) |
 
+| 11/23 | HTTP-1 ① | `GET /hello HTTP/1.1` → 200, 본문에 method=GET / path=/hello / version=HTTP/1.1 (통째로 돌려주기와 구분되게 이름표) | 손으로: `./webserver 9000 www` + `curl localhost:9000/hello` | 본문 3줄 일치, 로그 `파싱 성공: method=GET path=/hello version=HTTP/1.1 -> 200` (조각 1번에 끝남) | 진훈 |
+
+| 11/23 | HTTP-1 ② | `/hello HTTP/1.1 GET /hello HTTP/1.1` (3조각 아님) → 400 | `bash tests/test_request_line.sh ./webserver` | ① PASS, ② `PASS ✅ 400` (예측과 일치) | 진훈 |
+
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
 |---|---|---|

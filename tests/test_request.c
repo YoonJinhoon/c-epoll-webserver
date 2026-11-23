@@ -18,8 +18,50 @@ static void check(const char *name, const char *buf, size_t expected)
     }
 }
 
+/* 요청 라인 파싱: 성공해야 하는 경우 */
+static void check_line_ok(const char *name, const char *buf,
+                          const char *method, const char *path, const char *version)
+{
+    struct request_line rl;
+    int r = request_parse_line(buf, strlen(buf), &rl);
+    if (r == 0 && strcmp(rl.method, method) == 0 && strcmp(rl.path, path) == 0 &&
+        strcmp(rl.version, version) == 0) {
+        printf("  PASS  %s\n", name);
+    } else {
+        printf("  FAIL  %s (기대: 성공 %s|%s|%s)\n", name, method, path, version);
+        failed = 1;
+    }
+}
+
+/* 요청 라인 파싱: 실패(-1)해야 하는 경우 */
+static void check_line_bad(const char *name, const char *buf)
+{
+    struct request_line rl;
+    if (request_parse_line(buf, strlen(buf), &rl) == -1) {
+        printf("  PASS  %s\n", name);
+    } else {
+        printf("  FAIL  %s (기대: -1, 실제: 성공 %s|%s|%s)\n", name, rl.method, rl.path, rl.version);
+        failed = 1;
+    }
+}
+
+static void test_parse_line(void)
+{
+    printf("request_parse_line\n");
+    check_line_ok("정상 GET",               "GET /hello HTTP/1.1\r\n\r\n", "GET", "/hello", "HTTP/1.1");
+    check_line_ok("정상 POST, 헤더 있음",     "POST /a/b HTTP/1.0\r\nHost: x\r\n\r\n", "POST", "/a/b", "HTTP/1.0");
+    check_line_bad("6조각 (요청 두 개를 이어 씀)", "POST /hello HTTP/1.1 GET /hello HTTP/1.1\r\n\r\n");
+    check_line_bad("2조각 (메서드 빠짐)",      "/hello HTTP/1.1\r\n\r\n");
+    check_line_bad("공백 두 칸",              "GET  /hello HTTP/1.1\r\n\r\n");
+    check_line_bad("메서드 소문자",            "get /hello HTTP/1.1\r\n\r\n");
+    check_line_bad("경로가 /로 시작 안 함",     "GET hello HTTP/1.1\r\n\r\n");
+    check_line_bad("버전이 HTTP/ 아님",        "GET /hello FTP/1.1\r\n\r\n");
+    check_line_bad("줄 끝(\\r\\n) 없음",        "GET /hello HTTP/1.1");
+}
+
 int main(void)
 {
+    test_parse_line();
     printf("request_head_end\n");
     check("빈 입력",                     "",                                 0);
     check("요청 라인 중간까지만",          "GET / HT",                         0);

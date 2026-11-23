@@ -1,4 +1,4 @@
-/* 웹 서버 (S1: epoll 뼈대 + 요청을 끝까지 읽기)
+/* 웹 서버 (S1: epoll 뼈대 + 요청을 끝까지 읽기 / S2: 요청 라인 파싱)
  *
  * 사용법: ./webserver <port> <static_root>      (static_root 는 S3 에서 쓴다)
  *
@@ -60,20 +60,22 @@ static void conn_close(int epfd, struct conn *c)
     free(c);
 }
 
-/* ---------- 응답 (S1 에서는 항상 같은 응답) ---------- */
+/* ---------- 응답 ---------- */
 
-static void send_response(struct conn *c)
+/* 상태 코드(200, 400 ...)와 본문을 받아서 응답 하나를 보낸다 */
+static void send_response(struct conn *c, int status, const char *reason, const char *body)
 {
-    const char *body = "hello from webserver (S1)\n";
-    char resp[256];
+    char resp[4096];
     int n = snprintf(resp, sizeof resp,
-                     "HTTP/1.1 200 OK\r\n"
+                     "HTTP/1.1 %d %s\r\n"
                      "Content-Type: text/plain\r\n"
                      "Content-Length: %zu\r\n"
                      "Connection: close\r\n"
                      "\r\n"
                      "%s",
-                     strlen(body), body);
+                     status, reason, strlen(body), body);
+    if (n < 0 || (size_t)n >= sizeof resp)
+        return;
     write(c->fd, resp, (size_t)n);
 }
 
@@ -103,8 +105,21 @@ static void conn_on_data(int epfd, struct conn *c)
         return;                               /* epoll_wait 로 돌아간다 */
     }
 
-    printf("[fd %d] 머리 끝 발견 (머리 %zu 바이트) -> 응답 1번\n", c->fd, head);
-    send_response(c);
+    printf("[fd %d] 머리 끝 발견 (머리 %zu 바이트)\n", c->fd, head);
+
+    /* S2: 요청 라인을 세 조각으로 쪼갠다 */
+    struct request_line rl;
+    if (request_parse_line(c->buf, head, &rl) < 0) {
+        printf("[fd %d] 요청 라인이 규칙에 안 맞음 -> 400\n", c->fd);
+        send_response(c, 400, "Bad Request", "bad request line\n");
+    } else {
+        printf("[fd %d] 파싱 성공: method=%s path=%s version=%s -> 200\n",
+               c->fd, rl.method, rl.path, rl.version);
+        char body[2200];
+        snprintf(body, sizeof body, "method=%s\npath=%s\nversion=%s\n",
+                 rl.method, rl.path, rl.version);
+        send_response(c, 200, "OK", body);
+    }
     conn_close(epfd, c);
 }
 
