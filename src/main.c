@@ -112,6 +112,9 @@ static void conn_on_data(int epfd, struct conn *c)
     if (request_parse_line(c->buf, head, &rl) < 0) {
         printf("[fd %d] 요청 라인이 규칙에 안 맞음 -> 400\n", c->fd);
         send_response(c, 400, "Bad Request", "bad request line\n");
+    } else if ( strcmp(rl.method, "GET") != 0 && strcmp(rl.method, "POST") != 0 ) {
+        printf("[fd %d] method=%s 지원 안 함 -> 501\n", c->fd, rl.method);
+        send_response(c, 501, "Not Implemented", "method not supported\n");
     } else {
         printf("[fd %d] 파싱 성공: method=%s path=%s version=%s -> 200\n",
                c->fd, rl.method, rl.path, rl.version);

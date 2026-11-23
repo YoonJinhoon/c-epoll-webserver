@@ -4,6 +4,8 @@
 # 통과 기준:
 #   ① GET /hello HTTP/1.1                    → 200, 본문에 method=GET / path=/hello / version=HTTP/1.1
 #   ② /hello HTTP/1.1 GET /hello HTTP/1.1     → 400 (3조각이 아님)
+#   ③ HELLO /hello HTTP/1.1                  → 501 (모양은 맞지만 지원 안 하는 메서드)
+#   ④ POST /hello HTTP/1.1                   → 200 (POST 는 지원)
 #
 # 사용법:  bash tests/test_request_line.sh <서버 실행 파일>
 #   예)    bash tests/test_request_line.sh ./webserver
@@ -54,6 +56,24 @@ if [[ "$R2" == "HTTP/1.1 400"* ]]; then
     echo "[HTTP-1] ② 엉터리 요청 : PASS ✅  400"
 else
     echo "[HTTP-1] ② 엉터리 요청 : FAIL ❌  받은 응답: $(echo "$R2" | head -1)"
+    CODE=1
+fi
+
+# ③ 지원하지 않는 메서드 (모양은 맞지만 GET/POST 가 아님)
+R3=$(send_raw $'HELLO /hello HTTP/1.1\r\nHost: localhost\r\n\r\n' | tr -d '\r')
+if [[ "$R3" == "HTTP/1.1 501"* ]]; then
+    echo "[HTTP-1] ③ HELLO 메서드 : PASS ✅  501"
+else
+    echo "[HTTP-1] ③ HELLO 메서드 : FAIL ❌  받은 응답: $(echo "$R3" | head -1)"
+    CODE=1
+fi
+
+# ④ POST 는 지원해야 함 (501 로 막으면 안 됨)
+R4=$(send_raw $'POST /hello HTTP/1.1\r\nHost: localhost\r\n\r\n' | tr -d '\r')
+if [[ "$R4" == "HTTP/1.1 200"* && "$R4" == *"method=POST"* ]]; then
+    echo "[HTTP-1] ④ POST 메서드  : PASS ✅  200"
+else
+    echo "[HTTP-1] ④ POST 메서드  : FAIL ❌  받은 응답: $(echo "$R4" | head -1)"
     CODE=1
 fi
 

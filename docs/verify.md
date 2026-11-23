@@ -21,12 +21,17 @@
 
 | 11/23 | HTTP-1 ② | `/hello HTTP/1.1 GET /hello HTTP/1.1` (3조각 아님) → 400 | `bash tests/test_request_line.sh ./webserver` | ① PASS, ② `PASS ✅ 400` (예측과 일치) | 진훈 |
 
+| 11/23 | HTTP-1 ③④ | (진훈이 직접 쓴 첫 코드) GET/POST가 아닌 메서드 → 501, POST → 200 | `bash tests/test_request_line.sh ./webserver` (③④ 추가) | ①②③④ 모두 `PASS ✅` (예측과 일치). 과정: else if 두 개로 나눔 → ① FAIL로 잡힘 → `&&` 하나로 합침 | 진훈 |
+
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
 |---|---|---|
 | 11/21 | test_slow_client.sh | 느린 클라이언트를 **1개만** 붙임 → Worker 2개짜리 스레드 풀의 약점(느린 클라이언트 2개면 막힘)은 못 잡음 → **11/23 해결**: 개수 인자 추가 |
 
+| 11/23 | test_request_line.sh ①② | 501 기능을 추가해도 ①②는 원래 PASS → 새 기능을 검사하지 않음 → ③ HELLO→501, ④ POST→200 추가 |
+
 ## 테스트가 거짓말한 기록
 | 날짜 | 테스트 | 무슨 일 | 고친 것 |
 |---|---|---|---|
 | 11/21 | test_slow_client.sh | 실험 02 서버가 켜져 있어서, 실험 01 검사인데 PASS가 나옴 (엉뚱한 서버를 검사) | 포트 사용 중이면 중단 / 서버가 바로 죽으면 중단 |
+| 11/23 | test_request_line.sh | `make`가 컴파일 에러로 실패했는데 테스트를 돌림 → **옛날 ./webserver**를 검사함 | 규칙: make가 에러 없이 끝났을 때만 테스트 |
