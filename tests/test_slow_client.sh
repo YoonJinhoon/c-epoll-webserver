@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # 요구사항 연결-2: 느린 클라이언트가 다른 클라이언트를 막지 않는가
 #
-# 통과 기준: B가 가만히 있을 때, C가 LIMIT초 안에 서버의 응답을 받으면 PASS
+# 통과 기준: 느린 클라이언트 N개가 가만히 있을 때, C가 LIMIT초 안에 서버의 응답을 받으면 PASS
 #
-# 사용법:  bash tests/test_slow_client.sh <서버 실행 파일>
-#   예)    bash tests/test_slow_client.sh experiments/01-single-thread/server   → FAIL 이어야 정상
-#          bash tests/test_slow_client.sh experiments/02-thread-per-conn/server → PASS 여야 정상
+# 사용법:  bash tests/test_slow_client.sh <서버 실행 파일> [느린 클라이언트 개수, 기본 1]
+#   예)    bash tests/test_slow_client.sh experiments/01-single-thread/server     → FAIL 이어야 정상
+#          bash tests/test_slow_client.sh experiments/02-thread-per-conn/server   → PASS 여야 정상
+#          bash tests/test_slow_client.sh experiments/03-thread-pool/server 1     → PASS (Worker 2개)
+#          bash tests/test_slow_client.sh experiments/03-thread-pool/server 2     → FAIL (Worker 2개 다 묶임)
 
 SERVER="$1"
+SLOW="${2:-1}" # 느린 클라이언트 개수. 안 적으면 1
 PORT=9000
 LIMIT=2        # 초. 정상 응답은 0.01초 안팎이라 넉넉하게 잡음
 
 if [ -z "$SERVER" ]; then
-    echo "사용법: bash $0 <서버 실행 파일>"
+    echo "사용법: bash $0 <서버 실행 파일> [느린 클라이언트 개수]"
     exit 2
 fi
 
@@ -34,17 +37,19 @@ if ! kill -0 "$SERVER_PID" 2> /dev/null; then
     exit 2
 fi
 
-# 터미널 B 역할: 연결만 하고 아무것도 안 보냄
+# 터미널 B1, B2, ... 역할: 느린 클라이언트 SLOW개. 연결만 하고 아무것도 안 보냄
 #   (sleep 이 nc 의 입력을 붙잡고 있어서, nc 는 보낼 데이터 없이 연결만 유지한다)
-sleep 30 | nc localhost "$PORT" > /dev/null &
+for i in $(seq 1 "$SLOW"); do
+    sleep 30 | nc localhost "$PORT" > /dev/null &
+done
 sleep 0.3
 
 # 터미널 C 역할: 요청 보내고 LIMIT초까지만 기다림
 if curl -s --max-time "$LIMIT" "localhost:$PORT" > /dev/null; then
-    RESULT="PASS ✅  C가 ${LIMIT}초 안에 응답 받음 (B가 막지 않음)"
+    RESULT="PASS ✅  느린 클라이언트 ${SLOW}개가 있어도 C가 ${LIMIT}초 안에 응답 받음"
     CODE=0
 else
-    RESULT="FAIL ❌  C가 ${LIMIT}초 안에 응답 못 받음 (B가 막음)"
+    RESULT="FAIL ❌  느린 클라이언트 ${SLOW}개 때문에 C가 ${LIMIT}초 안에 응답 못 받음"
     CODE=1
 fi
 

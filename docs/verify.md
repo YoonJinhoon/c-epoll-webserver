@@ -10,10 +10,14 @@
 | 11/21 | 연결-2 | (스레드 풀, Worker 2개) 느린 클라이언트 1개면 PASS — W1이 B를, W2가 C를 맡으니까 | `bash tests/test_slow_client.sh experiments/03-thread-pool/server` | `PASS ✅` (예측과 일치) | 진훈 |
 | 11/21 | 연결-3 | (스레드 풀, Worker 2개) 느린 클라이언트 2개면 C는 연결은 되지만 처리 안 됨 | 실험 03, 터미널 A/B1/B2/C 손으로 | `[main] ⏰ ... fd 6 생김` 있음 + `②에서 fd 6 꺼냄` 없음 → B1이 요청 보내자 `[W1] ②에서 fd 6 꺼냄` | 진훈 |
 
+| 11/23 | 연결-3 | (스레드 풀, Worker 2개) 느린 클라이언트 2개면 FAIL — Worker 2개가 다 묶여서 C를 처리할 Worker가 없으니까 | `bash tests/test_slow_client.sh experiments/03-thread-pool/server 2` | `FAIL ❌ 느린 클라이언트 2개 때문에...` (예측과 일치) | 진훈 |
+
+| 11/23 | 연결-3 | (epoll, 스레드 1개) 느린 클라이언트 2개여도 PASS — 데이터가 온 fd만 골라서 read하니까 | 손으로 A/B1/B2/C → `bash tests/test_slow_client.sh experiments/04-epoll/server 2` | 로그에 `⏰ fd 7에 요청 데이터 도착`만 있고 fd 5·6은 없음 / `PASS ✅` (예측과 일치) | 진훈 |
+
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
 |---|---|---|
-| 11/21 | test_slow_client.sh | 느린 클라이언트를 **1개만** 붙임 → Worker 2개짜리 스레드 풀의 약점(느린 클라이언트 2개면 막힘)은 못 잡음 |
+| 11/21 | test_slow_client.sh | 느린 클라이언트를 **1개만** 붙임 → Worker 2개짜리 스레드 풀의 약점(느린 클라이언트 2개면 막힘)은 못 잡음 → **11/23 해결**: 개수 인자 추가 |
 
 ## 테스트가 거짓말한 기록
 | 날짜 | 테스트 | 무슨 일 | 고친 것 |
