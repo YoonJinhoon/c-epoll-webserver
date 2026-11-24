@@ -29,4 +29,13 @@ struct request_line {
  */
 int request_parse_line(const char *buf, size_t len, struct request_line *out);
 
+/* 경로가 루트 폴더 밖으로 나갈 수 있는가? (S3-c, 경로 탈출 막기)
+ *
+ * 입력: 요청 경로 (예: "/index.html", "/../src/main.c")
+ * 출력: 안전 → 1
+ *       경로 조각 중에 ".." 가 하나라도 있으면 → 0 (서버는 403 으로 답한다)
+ *
+ * 예) "/a/../b" 도 0. 실제로는 루트 안에 머물지만, 판단을 단순하게 하려고 ".." 자체를 금지한다 */
+int path_is_safe(const char *path);
+
 #endif

@@ -4,12 +4,13 @@
 # 통과 기준:
 #   ① GET /index.html   → 200, 본문에 "It works!"   (www/index.html)
 #   ② GET /nothing.html → 404                       (www 에 없는 파일)
+#   ③ GET /../src/main.c → 403, 소스 코드 내용은 나오지 않음 (경로 탈출 막기, S3-c)
 #
 # 사용법:  bash tests/test_static.sh <서버 실행 파일>
 #   예)    bash tests/test_static.sh ./webserver
 
 SERVER="$1"
-PORT=9000
+PORT=${PORT:-9000}  # 다른 포트: PORT=9100 bash ...
 
 if [ -z "$SERVER" ]; then
     echo "사용법: bash $0 <서버 실행 파일>"
@@ -46,6 +47,15 @@ if [[ "$S2" == "404" ]]; then
     echo "[파일] ② /nothing.html : PASS ✅  404"
 else
     echo "[파일] ② /nothing.html : FAIL ❌  상태 $S2"
+    CODE=1
+fi
+
+# ③ 경로 탈출 시도 (S3-c): 403 이 오고, 소스 코드 내용은 나오면 안 된다
+S3=$(curl -s --path-as-is -o /tmp/static_body.$$ -w '%{http_code}' "localhost:$PORT/../src/main.c")
+if [[ "$S3" == "403" ]] && ! grep -q "#include" /tmp/static_body.$$; then
+    echo "[파일] ③ /../src/main.c : PASS ✅  403, 소스 코드 안 나옴"
+else
+    echo "[파일] ③ /../src/main.c : FAIL ❌  상태 $S3, 본문 첫 줄: $(head -1 /tmp/static_body.$$ 2> /dev/null)"
     CODE=1
 fi
 

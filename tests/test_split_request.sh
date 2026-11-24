@@ -10,7 +10,7 @@
 #          bash tests/test_split_request.sh experiments/04-epoll/server         → FAIL 이어야 정상 (첫 조각에 바로 응답)
 
 SERVER="$1"
-PORT=9000
+PORT=${PORT:-9000}  # 다른 포트: PORT=9100 bash ...
 WAIT=1         # 초. 첫 조각 뒤에 응답이 오는지 이만큼 지켜본다
 
 if [ -z "$SERVER" ]; then

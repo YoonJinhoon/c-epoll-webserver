@@ -12,7 +12,7 @@
 #   예)    bash tests/test_request_line.sh ./webserver
 
 SERVER="$1"
-PORT=9000
+PORT=${PORT:-9000}  # 다른 포트: PORT=9100 bash ...
 
 if [ -z "$SERVER" ]; then
     echo "사용법: bash $0 <서버 실행 파일>"

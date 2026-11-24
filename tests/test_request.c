@@ -59,8 +59,32 @@ static void test_parse_line(void)
     check_line_bad("줄 끝(\\r\\n) 없음",        "GET /hello HTTP/1.1");
 }
 
+static void check_safe(const char *name, const char *path, int expected)
+{
+    int got = path_is_safe(path);
+    if (got == expected) {
+        printf("  PASS  %s\n", name);
+    } else {
+        printf("  FAIL  %s (경로 %s, 기대 %d, 실제 %d)\n", name, path, expected, got);
+        failed = 1;
+    }
+}
+
+static void test_path_safe(void)
+{
+    printf("path_is_safe\n");
+    check_safe("보통 파일",               "/index.html",       1);
+    check_safe("하위 폴더",               "/img/a.png",        1);
+    check_safe("루트",                    "/",                 1);
+    check_safe("점 두 개가 이름 일부",     "/a..b.html",        1);   /* ".." 조각이 아님 */
+    check_safe("맨 앞에서 탈출",          "/../src/main.c",    0);
+    check_safe("중간에서 탈출",           "/img/../../etc",    0);
+    check_safe("끝이 ..",                 "/img/..",           0);
+}
+
 int main(void)
 {
+    test_path_safe();
     test_parse_line();
     printf("request_head_end\n");
     check("빈 입력",                     "",                                 0);

@@ -103,10 +103,17 @@ static void send_response(struct conn *c, int status, const char *reason, const 
 /* S3: 경로에 해당하는 파일을 루트 폴더에서 찾아 보낸다.
  *   /index.html → www/index.html
  *   /           → www/index.html  (경로가 / 로 끝나면 index.html 을 붙인다)
- * 파일이 없으면 404, 읽을 권한이 없으면 403, 그 밖의 문제는 500.
- * 주의: 아직 "/../" 로 루트 밖으로 나가는 경로를 막지 않는다 (S3-c 에서) */
+ * 경로에 ".." 가 있으면 403 (루트 밖으로 나가는 것 금지, S3-c).
+ * 파일이 없으면 404, 읽을 권한이 없으면 403, 그 밖의 문제는 500. */
 static void serve_file(struct conn *c, const char *path)
 {
+    /* 0. S3-c: 루트 밖으로 나가는 경로("..")는 파일을 찾기 전에 막는다 */
+    if (!path_is_safe(path)) {
+        printf("[fd %d] 경로 %s 에 \"..\" 있음 (루트 밖으로 나가려 함) -> 403\n", c->fd, path);
+        send_response(c, 403, "Forbidden", "forbidden\n");
+        return;
+    }
+
     /* 1. 실제 파일 위치 = 루트 + 경로 */
     char file[4200];
     size_t plen = strlen(path);

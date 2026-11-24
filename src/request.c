@@ -23,6 +23,23 @@ static int copy_piece(char *dst, size_t dst_size, const char *start, const char 
     return 0;
 }
 
+int path_is_safe(const char *path)
+{
+    /* 경로를 '/' 로 나눈 조각들을 하나씩 보면서, 조각이 정확히 ".." 인지 검사한다
+     *   "/../src/main.c" → 조각: "", "..", "src", "main.c" → ".." 있음 → 0 */
+    const char *p = path;
+    while (*p) {
+        const char *start = p;
+        while (*p && *p != '/')        /* 다음 '/' 까지가 조각 하나 */
+            p++;
+        if (p - start == 2 && start[0] == '.' && start[1] == '.')
+            return 0;
+        if (*p == '/')
+            p++;                       /* '/' 건너뛰고 다음 조각으로 */
+    }
+    return 1;
+}
+
 int request_parse_line(const char *buf, size_t len, struct request_line *out)
 {
     /* 1. 첫 줄의 끝("\r\n")을 찾는다 */

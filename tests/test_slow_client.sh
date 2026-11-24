@@ -11,7 +11,7 @@
 
 SERVER="$1"
 SLOW="${2:-1}" # 느린 클라이언트 개수. 안 적으면 1
-PORT=9000
+PORT=${PORT:-9000}  # 다른 포트: PORT=9100 bash ...
 LIMIT=2        # 초. 정상 응답은 0.01초 안팎이라 넉넉하게 잡음
 
 if [ -z "$SERVER" ]; then
