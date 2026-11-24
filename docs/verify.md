@@ -23,6 +23,10 @@
 
 | 11/23 | HTTP-1 ③④ | (진훈이 직접 쓴 첫 코드) GET/POST가 아닌 메서드 → 501, POST → 200 | `bash tests/test_request_line.sh ./webserver` (③④ 추가) | ①②③④ 모두 `PASS ✅` (예측과 일치). 과정: else if 두 개로 나눔 → ① FAIL로 잡힘 → `&&` 하나로 합침 | 진훈 |
 
+| 11/24 | 파일-1·3 | `/index.html` → 200 + It works! / `/nothing.html` → 404 | 손으로 `curl -i localhost:9000/nothing.html` + `bash tests/test_static.sh ./webserver` | `HTTP/1.1 404 Not Found`, 로그 `파일 www/nothing.html 없음 -> 404` / ①② `PASS ✅` (예측과 일치) | 진훈 |
+
+| 11/24 | 파일-4 (보안) | **버그 확인:** `GET /../src/main.c` → www 밖의 소스 코드가 나온다 (경로 탈출) | `curl --path-as-is localhost:9000/../src/main.c` | 예측 "main.c 내용이 나온다" → 실제로 나옴 ❌ (S3-c에서 403으로 고칠 것) | 진훈 |
+
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
 |---|---|---|

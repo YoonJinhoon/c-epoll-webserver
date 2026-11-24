@@ -1,12 +1,14 @@
-/* 웹 서버 (S1: epoll 뼈대 + 요청을 끝까지 읽기 / S2: 요청 라인 파싱)
+/* 웹 서버 (S1: epoll 뼈대 + 요청을 끝까지 읽기 / S2: 요청 라인 파싱 / S3: 정적 파일)
  *
- * 사용법: ./webserver <port> <static_root>      (static_root 는 S3 에서 쓴다)
+ * 사용법: ./webserver <port> <static_root>      예) ./webserver 9000 www
  *
  * 구조: 스레드는 main 하나. epoll 로 여러 연결을 지켜본다 (실험 04 와 같음).
  * S1 에서 새로 생긴 것: 연결마다 "보관함"(struct conn)을 하나씩 두고,
  *   조각이 도착할 때마다 보관함 뒤에 이어 붙인다.
  *   머리 끝(\r\n\r\n)이 보이면 그때 응답한다. 안 보이면 epoll_wait 로 돌아가 다른 연결을 처리한다.
  */
+#include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +16,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
+#include <sys/stat.h>
 
 #include "request.h"
 
@@ -29,6 +32,7 @@ struct conn {
 };
 
 static struct conn *conns[MAX_FDS];   /* fd 번호로 보관함을 찾는 표 */
+static const char  *g_root;           /* 정적 파일 루트 폴더 (예: "www") */
 
 /* ---------- 연결이 생길 때 / 끝날 때 ---------- */
 
@@ -62,6 +66,23 @@ static void conn_close(int epfd, struct conn *c)
 
 /* ---------- 응답 ---------- */
 
+/* len 바이트를 "전부" 보낸다. write 는 덜 보낼 수 있으므로, 다 보낼 때까지 반복한다.
+ * 성공 0, 실패 -1 */
+static int write_all(int fd, const char *p, size_t len)
+{
+    while (len > 0) {
+        ssize_t n = write(fd, p, len);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            return -1;
+        }
+        p   += n;          /* 보낸 만큼 앞으로 */
+        len -= (size_t)n;  /* 남은 양 줄이기 */
+    }
+    return 0;
+}
+
 /* 상태 코드(200, 400 ...)와 본문을 받아서 응답 하나를 보낸다 */
 static void send_response(struct conn *c, int status, const char *reason, const char *body)
 {
@@ -76,7 +97,68 @@ static void send_response(struct conn *c, int status, const char *reason, const 
                      status, reason, strlen(body), body);
     if (n < 0 || (size_t)n >= sizeof resp)
         return;
-    write(c->fd, resp, (size_t)n);
+    write_all(c->fd, resp, (size_t)n);
+}
+
+/* S3: 경로에 해당하는 파일을 루트 폴더에서 찾아 보낸다.
+ *   /index.html → www/index.html
+ *   /           → www/index.html  (경로가 / 로 끝나면 index.html 을 붙인다)
+ * 파일이 없으면 404, 읽을 권한이 없으면 403, 그 밖의 문제는 500.
+ * 주의: 아직 "/../" 로 루트 밖으로 나가는 경로를 막지 않는다 (S3-c 에서) */
+static void serve_file(struct conn *c, const char *path)
+{
+    /* 1. 실제 파일 위치 = 루트 + 경로 */
+    char file[4200];
+    size_t plen = strlen(path);
+    snprintf(file, sizeof file, "%s%s%s", g_root, path,
+             (plen > 0 && path[plen - 1] == '/') ? "index.html" : "");
+
+    /* 2. 파일 열기 */
+    int ffd = open(file, O_RDONLY);
+    if (ffd < 0) {
+        if (errno == ENOENT || errno == ENOTDIR) {
+            printf("[fd %d] 파일 %s 없음 -> 404\n", c->fd, file);
+            send_response(c, 404, "Not Found", "not found\n");
+        } else if (errno == EACCES) {
+            printf("[fd %d] 파일 %s 읽을 권한 없음 -> 403\n", c->fd, file);
+            send_response(c, 403, "Forbidden", "forbidden\n");
+        } else {
+            printf("[fd %d] 파일 %s 열기 실패 -> 500\n", c->fd, file);
+            send_response(c, 500, "Internal Server Error", "internal error\n");
+        }
+        return;
+    }
+
+    /* 3. 일반 파일인지, 크기는 몇인지 */
+    struct stat st;
+    if (fstat(ffd, &st) < 0 || !S_ISREG(st.st_mode)) {   /* 폴더 등은 보내지 않는다 */
+        printf("[fd %d] %s 는 일반 파일이 아님 -> 404\n", c->fd, file);
+        close(ffd);
+        send_response(c, 404, "Not Found", "not found\n");
+        return;
+    }
+
+    /* 4. 머리 보내기 (본문 길이 = 파일 크기) */
+    char head[256];
+    int hn = snprintf(head, sizeof head,
+                      "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: %s\r\n"
+                      "Content-Length: %lld\r\n"
+                      "Connection: close\r\n"
+                      "\r\n",
+                      "text/plain",                     /* S3-b: 확장자별 MIME 타입으로 바꿀 자리 */
+                      (long long)st.st_size);
+    write_all(c->fd, head, (size_t)hn);
+
+    /* 5. 본문 = 파일 내용을 조금씩 읽어서 그대로 보내기 */
+    char chunk[8192];
+    ssize_t n;
+    while ((n = read(ffd, chunk, sizeof chunk)) > 0) {
+        if (write_all(c->fd, chunk, (size_t)n) < 0)
+            break;
+    }
+    close(ffd);
+    printf("[fd %d] 파일 %s (%lld 바이트) 보냄 -> 200\n", c->fd, file, (long long)st.st_size);
 }
 
 /* ---------- 조각 하나가 도착했을 때 ---------- */
@@ -115,7 +197,12 @@ static void conn_on_data(int epfd, struct conn *c)
     } else if ( strcmp(rl.method, "GET") != 0 && strcmp(rl.method, "POST") != 0 ) {
         printf("[fd %d] method=%s 지원 안 함 -> 501\n", c->fd, rl.method);
         send_response(c, 501, "Not Implemented", "method not supported\n");
+    } else if (strcmp(rl.method, "GET") == 0) {
+        /* S3: GET 은 파일을 찾아서 보낸다 */
+        printf("[fd %d] 파싱 성공: method=%s path=%s\n", c->fd, rl.method, rl.path);
+        serve_file(c, rl.path);
     } else {
+        /* POST: 본문 처리는 S4. 지금은 S2 처럼 파싱 결과만 돌려준다 */
         printf("[fd %d] 파싱 성공: method=%s path=%s version=%s -> 200\n",
                c->fd, rl.method, rl.path, rl.version);
         char body[2200];
@@ -153,6 +240,7 @@ int main(int argc, char **argv)
         return 1;
     }
     int port = atoi(argv[1]);
+    g_root = argv[2];
 
     setvbuf(stdout, NULL, _IOLBF, 0);         /* 로그를 줄마다 바로 출력 */
     signal(SIGPIPE, SIG_IGN);                 /* 응답 도중 클라이언트가 끊어도 서버가 죽지 않게 (S6) */

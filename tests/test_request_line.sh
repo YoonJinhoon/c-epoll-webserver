@@ -2,7 +2,8 @@
 # 요구사항 HTTP-1: 요청 라인을 세 조각(메서드, 경로, 버전)으로 쪼개는가
 #
 # 통과 기준:
-#   ① GET /hello HTTP/1.1                    → 200, 본문에 method=GET / path=/hello / version=HTTP/1.1
+#   ① POST /hello HTTP/1.1                   → 200, 본문에 method=POST / path=/hello / version=HTTP/1.1
+#      (S2 때는 GET 으로 검사했지만, S3부터 GET 은 파일을 보내므로 POST 로 바꿈)
 #   ② /hello HTTP/1.1 GET /hello HTTP/1.1     → 400 (3조각이 아님)
 #   ③ HELLO /hello HTTP/1.1                  → 501 (모양은 맞지만 지원 안 하는 메서드)
 #   ④ POST /hello HTTP/1.1                   → 200 (POST 는 지원)
@@ -41,9 +42,9 @@ send_raw() {
 
 CODE=0
 
-# ① 정상 요청
-R1=$(send_raw $'GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n' | tr -d '\r')
-if [[ "$R1" == "HTTP/1.1 200"* && "$R1" == *"method=GET"* && "$R1" == *"path=/hello"* && "$R1" == *"version=HTTP/1.1"* ]]; then
+# ① 정상 요청 (S3부터 GET 은 파일을 보내므로, 파싱 결과는 POST 로 확인한다)
+R1=$(send_raw $'POST /hello HTTP/1.1\r\nHost: localhost\r\n\r\n' | tr -d '\r')
+if [[ "$R1" == "HTTP/1.1 200"* && "$R1" == *"method=POST"* && "$R1" == *"path=/hello"* && "$R1" == *"version=HTTP/1.1"* ]]; then
     echo "[HTTP-1] ① 정상 요청 : PASS ✅  200 + method/path/version 따로 꺼냄"
 else
     echo "[HTTP-1] ① 정상 요청 : FAIL ❌  받은 응답: $(echo "$R1" | head -1) / 본문: $(echo "$R1" | tail -3 | tr '\n' ' ')"
