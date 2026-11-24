@@ -46,4 +46,13 @@ int path_is_safe(const char *path);
  */
 const char *mime_type(const char *filename);
 
+/* 요청 머리에서 Content-Length 헤더 값을 읽는다. (S4)
+ *
+ * 입력: buf[0 .. head_len) — 요청 머리 (빈 줄까지)
+ * 출력: Content-Length 값 (예: "Content-Length: 8" → 8)
+ *       헤더가 없으면 → 0 (본문 없음)
+ *       숫자가 아니거나 음수면 → -1 (서버는 400)
+ */
+long request_content_length(const char *buf, size_t head_len);
+
 #endif

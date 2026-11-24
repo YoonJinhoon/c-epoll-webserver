@@ -31,6 +31,8 @@
 
 | 11/24 | 파일-2 (MIME) | (진훈 작성 `mime_type`) index.html → `Content-Type: text/html`, 크롬에서 웹페이지로 보임 | `curl -i localhost:9000/index.html` + 크롬 / `make test` 9개 / test_static ④ | `Content-Type: text/html`, 크롬에 큰 글씨 It works! (예측: "It works! 글자만" → 일치, 굵기는 예상 못 함) | 진훈 |
 
+| 11/24 | HTTP-4 | (진훈 작성: 본문 다 모였나 조건) `POST /echo` Content-Length 8: 한 번에 → name=jin / `nam`만 → 응답 없음, `e=jin` 뒤 → name=jin | `bash tests/test_post_body.sh ./webserver` (진훈 코드 전: ①② FAIL 확인) | 1차 `clen != c->len + head` → 둘 다 응답 없음 FAIL (숫자 넣어 따라가서 원인 찾음: 8 != 132 참 → 영원히 기다림) → `c->len < head + (size_t)clen` → ①② PASS | 진훈 |
+
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
 |---|---|---|

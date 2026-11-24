@@ -1,4 +1,5 @@
 #include <string.h>
+#include <strings.h>     /* strncasecmp */
 
 #include "request.h"
 
@@ -64,6 +65,36 @@ const char *mime_type(const char *filename)
     /* ===== 여기까지 ===== */
 
     return "application/octet-stream";          /* 모르는 확장자 */
+}
+
+long request_content_length(const char *buf, size_t head_len)
+{
+    const char *name = "\r\nContent-Length:";
+    size_t nlen = strlen(name);
+
+    /* 머리 안에서 "\r\nContent-Length:" 줄을 찾는다 (헤더 이름은 대소문자 무시) */
+    for (size_t i = 0; i + nlen <= head_len; i++) {
+        if (strncasecmp(buf + i, name, nlen) != 0)
+            continue;
+
+        /* 콜론 뒤 공백 건너뛰기 */
+        const char *p = buf + i + nlen;
+        while (*p == ' ')
+            p++;
+
+        /* 숫자를 읽는다: "8\r\n" → 8 */
+        if (*p < '0' || *p > '9')
+            return -1;                       /* 숫자가 아님 */
+        long value = 0;
+        while (*p >= '0' && *p <= '9') {
+            value = value * 10 + (*p - '0');
+            if (value > 100000000)           /* 100MB 넘으면 이상한 요청으로 본다 */
+                return -1;
+            p++;
+        }
+        return value;
+    }
+    return 0;                                /* 헤더 없음 = 본문 없음 */
 }
 
 int request_parse_line(const char *buf, size_t len, struct request_line *out)

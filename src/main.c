@@ -83,21 +83,27 @@ static int write_all(int fd, const char *p, size_t len)
     return 0;
 }
 
-/* 상태 코드(200, 400 ...)와 본문을 받아서 응답 하나를 보낸다 */
-static void send_response(struct conn *c, int status, const char *reason, const char *body)
+/* 상태 코드와 본문(길이 len 바이트)을 받아서 응답 하나를 보낸다 */
+static void send_bytes(struct conn *c, int status, const char *reason, const char *body, size_t len)
 {
-    char resp[4096];
-    int n = snprintf(resp, sizeof resp,
+    char head[256];
+    int n = snprintf(head, sizeof head,
                      "HTTP/1.1 %d %s\r\n"
                      "Content-Type: text/plain\r\n"
                      "Content-Length: %zu\r\n"
                      "Connection: close\r\n"
-                     "\r\n"
-                     "%s",
-                     status, reason, strlen(body), body);
-    if (n < 0 || (size_t)n >= sizeof resp)
+                     "\r\n",
+                     status, reason, len);
+    if (n < 0 || (size_t)n >= sizeof head)
         return;
-    write_all(c->fd, resp, (size_t)n);
+    write_all(c->fd, head, (size_t)n);
+    write_all(c->fd, body, len);
+}
+
+/* 본문이 글자(문자열)일 때 쓰는 짧은 버전 */
+static void send_response(struct conn *c, int status, const char *reason, const char *body)
+{
+    send_bytes(c, status, reason, body, strlen(body));
 }
 
 /* S3: 경로에 해당하는 파일을 루트 폴더에서 찾아 보낸다.
@@ -209,13 +215,51 @@ static void conn_on_data(int epfd, struct conn *c)
         printf("[fd %d] 파싱 성공: method=%s path=%s\n", c->fd, rl.method, rl.path);
         serve_file(c, rl.path);
     } else {
-        /* POST: 본문 처리는 S4. 지금은 S2 처럼 파싱 결과만 돌려준다 */
-        printf("[fd %d] 파싱 성공: method=%s path=%s version=%s -> 200\n",
-               c->fd, rl.method, rl.path, rl.version);
-        char body[2200];
-        snprintf(body, sizeof body, "method=%s\npath=%s\nversion=%s\n",
-                 rl.method, rl.path, rl.version);
-        send_response(c, 200, "OK", body);
+        /* S4: POST 는 본문을 Content-Length 만큼 끝까지 모은 뒤에 처리한다 */
+        long clen = request_content_length(c->buf, head);
+        if (clen < 0) {
+            printf("[fd %d] Content-Length 가 이상함 -> 400\n", c->fd);
+            send_response(c, 400, "Bad Request", "bad content-length\n");
+            conn_close(epfd, c);
+            return;
+        }
+        if (head + (size_t)clen > BUF_SIZE) {
+            printf("[fd %d] 머리+본문이 보관함(%d)보다 큼 -> 413\n", c->fd, BUF_SIZE);
+            send_response(c, 413, "Payload Too Large", "too large\n");
+            conn_close(epfd, c);
+            return;
+        }
+
+        /* ===== 여기부터 진훈 작성: 본문이 다 모였나? =====
+         * 지금까지 모인 것:   c->len 바이트   (머리 head 바이트 + 지금까지 온 본문)
+         * 다 모이려면 필요한 것: head + clen 바이트
+         * 아직 덜 모였으면 → 로그를 찍고 return 한다.
+         *   (return 하면 연결을 닫지 않고 epoll_wait 로 돌아가서 다음 조각을 기다린다) */
+
+        if (c->len < head + (size_t)clen) {
+            printf("[fd %d] 본문 아직 덜 옴 -> 기다림\n", c->fd);
+            return;
+        }
+    
+    
+
+
+        /* ===== 여기까지 ===== */
+
+        printf("[fd %d] 본문 %ld 바이트 다 모임\n", c->fd, clen);
+        if (strcmp(rl.path, "/echo") == 0) {
+            /* /echo: 받은 본문을 그대로 돌려준다 */
+            printf("[fd %d] POST /echo -> 본문 그대로 돌려줌 -> 200\n", c->fd);
+            send_bytes(c, 200, "OK", c->buf + head, (size_t)clen);
+        } else {
+            /* 그 밖의 POST: S2 처럼 파싱 결과를 돌려준다 */
+            printf("[fd %d] 파싱 성공: method=%s path=%s version=%s -> 200\n",
+                   c->fd, rl.method, rl.path, rl.version);
+            char body[2200];
+            snprintf(body, sizeof body, "method=%s\npath=%s\nversion=%s\n",
+                     rl.method, rl.path, rl.version);
+            send_response(c, 200, "OK", body);
+        }
     }
     conn_close(epfd, c);
 }
