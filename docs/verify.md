@@ -29,6 +29,8 @@
 
 | 11/24 | 파일-4 (보안) | `GET /../src/main.c` → 403, 소스 코드 안 나옴 | 새 테스트 ③이 **고치기 전 코드에서 FAIL** 확인(Claude) → 진훈이 손으로 `curl -i --path-as-is localhost:9000/../src/main.c` | `HTTP/1.1 403 Forbidden`, 로그 `경로 /../src/main.c 에 ".." 있음 -> 403` (예측과 일치) | 진훈 |
 
+| 11/24 | 파일-2 (MIME) | (진훈 작성 `mime_type`) index.html → `Content-Type: text/html`, 크롬에서 웹페이지로 보임 | `curl -i localhost:9000/index.html` + 크롬 / `make test` 9개 / test_static ④ | `Content-Type: text/html`, 크롬에 큰 글씨 It works! (예측: "It works! 글자만" → 일치, 굵기는 예상 못 함) | 진훈 |
+
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
 |---|---|---|

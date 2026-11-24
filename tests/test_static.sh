@@ -5,6 +5,7 @@
 #   ① GET /index.html   → 200, 본문에 "It works!"   (www/index.html)
 #   ② GET /nothing.html → 404                       (www 에 없는 파일)
 #   ③ GET /../src/main.c → 403, 소스 코드 내용은 나오지 않음 (경로 탈출 막기, S3-c)
+#   ④ GET /index.html 의 Content-Type → text/html (MIME, S3-b)
 #
 # 사용법:  bash tests/test_static.sh <서버 실행 파일>
 #   예)    bash tests/test_static.sh ./webserver
@@ -47,6 +48,15 @@ if [[ "$S2" == "404" ]]; then
     echo "[파일] ② /nothing.html : PASS ✅  404"
 else
     echo "[파일] ② /nothing.html : FAIL ❌  상태 $S2"
+    CODE=1
+fi
+
+# ④ MIME 타입 (S3-b): html 파일은 Content-Type: text/html 로 와야 한다
+CT=$(curl -s -o /dev/null -w '%{content_type}' "localhost:$PORT/index.html")
+if [[ "$CT" == "text/html" ]]; then
+    echo "[파일] ④ Content-Type   : PASS ✅  text/html"
+else
+    echo "[파일] ④ Content-Type   : FAIL ❌  $CT"
     CODE=1
 fi
 

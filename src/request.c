@@ -40,6 +40,32 @@ int path_is_safe(const char *path)
     return 1;
 }
 
+const char *mime_type(const char *filename)
+{
+    const char *dot = strrchr(filename, '.');   /* 마지막 '.' 의 위치. 없으면 NULL */
+    if (dot == NULL)
+        return "application/octet-stream";
+
+    /* ===== 여기부터 진훈 작성 =====
+     * dot 은 ".html" 같은 확장자 글자를 가리킨다.
+     * strcmp 로 비교해서 맞는 MIME 타입 글자를 return 한다. */
+
+    if (strcmp(dot, ".html") == 0)
+        return "text/html";
+    if (strcmp(dot, ".css") == 0)
+        return "text/css";
+    if (strcmp(dot, ".js") == 0)
+        return "text/javascript";
+    if (strcmp(dot, ".png") == 0)
+        return "image/png";
+    if (strcmp(dot, ".jpg") == 0 || strcmp(dot, ".jpeg") == 0)
+        return "image/jpeg";
+
+    /* ===== 여기까지 ===== */
+
+    return "application/octet-stream";          /* 모르는 확장자 */
+}
+
 int request_parse_line(const char *buf, size_t len, struct request_line *out)
 {
     /* 1. 첫 줄의 끝("\r\n")을 찾는다 */

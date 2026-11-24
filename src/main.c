@@ -153,7 +153,7 @@ static void serve_file(struct conn *c, const char *path)
                       "Content-Length: %lld\r\n"
                       "Connection: close\r\n"
                       "\r\n",
-                      "text/plain",                     /* S3-b: 확장자별 MIME 타입으로 바꿀 자리 */
+                      mime_type(file),                  /* S3-b: 확장자별 MIME 타입 */
                       (long long)st.st_size);
     write_all(c->fd, head, (size_t)hn);
 

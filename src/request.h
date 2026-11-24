@@ -38,4 +38,12 @@ int request_parse_line(const char *buf, size_t len, struct request_line *out);
  * 예) "/a/../b" 도 0. 실제로는 루트 안에 머물지만, 판단을 단순하게 하려고 ".." 자체를 금지한다 */
 int path_is_safe(const char *path);
 
+/* 파일 이름의 확장자를 보고 Content-Type 에 쓸 MIME 타입 글자를 돌려준다. (S3-b, 진훈 작성)
+ *
+ * 입력: 파일 이름 (예: "www/index.html")
+ * 출력: "text/html", "text/css", "text/javascript", "image/png", "image/jpeg"
+ *       모르는 확장자이거나 확장자가 없으면 "application/octet-stream"
+ */
+const char *mime_type(const char *filename);
+
 #endif

@@ -82,8 +82,34 @@ static void test_path_safe(void)
     check_safe("끝이 ..",                 "/img/..",           0);
 }
 
+static void check_mime(const char *file, const char *expected)
+{
+    const char *got = mime_type(file);
+    if (strcmp(got, expected) == 0) {
+        printf("  PASS  %s -> %s\n", file, got);
+    } else {
+        printf("  FAIL  %s (기대 %s, 실제 %s)\n", file, expected, got);
+        failed = 1;
+    }
+}
+
+static void test_mime(void)
+{
+    printf("mime_type (진훈 작성)\n");
+    check_mime("www/index.html",   "text/html");
+    check_mime("www/style.css",    "text/css");
+    check_mime("www/app.js",       "text/javascript");
+    check_mime("www/a.png",        "image/png");
+    check_mime("www/a.jpg",        "image/jpeg");
+    check_mime("www/a.jpeg",       "image/jpeg");
+    check_mime("www/my.page.html", "text/html");                 /* 점이 여러 개 → 마지막 점 */
+    check_mime("www/README",       "application/octet-stream");  /* 확장자 없음 */
+    check_mime("www/a.zip",        "application/octet-stream");  /* 모르는 확장자 */
+}
+
 int main(void)
 {
+    test_mime();
     test_path_safe();
     test_parse_line();
     printf("request_head_end\n");
