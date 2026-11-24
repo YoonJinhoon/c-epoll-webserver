@@ -29,10 +29,10 @@
 |---|---|---|---|---|
 | S1 | epoll 뼈대 + **요청을 끝까지 읽기** (빈 줄 `\r\n\r\n`이 올 때까지, 조각나서 와도) | 연결-1·3·4, HTTP-2 | `test_split_request.sh` PASS / `test_slow_client.sh` PASS / `make test` PASS | ✅ 11/23 |
 | S2 | 요청 라인 파싱 + 응답 만들기 (400/501/200). 헤더 파싱은 S4에서 필요할 때 | HTTP-1·5 | `test_request_line.sh` ①~④ PASS, 단위 테스트 | ✅ 11/23 |
-| S3 | 정적 파일 + MIME + 404/403 + 루트 밖 접근 막기 (a 파일·404 ✅ / c `..` 차단 403 ✅ / **b MIME ⬜ 진훈 직접 작성**) | 파일-1~4 | `test_static.sh` ①②③ PASS / 브라우저에서 index.html이 웹페이지로 보임 | 🔶 a·c ✅ 11/24 |
+| S3 | 정적 파일 + MIME + 404/403 + 루트 밖 접근 막기 (a 파일·404 ✅ / c `..` 차단 403 ✅ / b MIME ✅ 진훈 작성) | 파일-1~4 | `test_static.sh` ①②③ PASS / 브라우저에서 index.html이 웹페이지로 보임 | ✅ 11/24 |
 | S4 | POST 본문 (Content-Length) 끝까지 읽기, `POST /echo`. 동적 처리는 S5 백엔드 전달과 합침 | HTTP-4 | `test_post_body.sh` ①② PASS | ✅ 11/24 |
 | S5 | Reverse Proxy: 경로 라우팅 + Round-Robin + 백엔드 타임아웃 | 프록시-1~4 | 백엔드 2개에 번갈아 전달, 죽은 백엔드에 502/504 | ⬜ |
-| S6 | 자원·종료: 끊김 처리, SIGPIPE, SIGINT/SIGTERM, 이상한 요청. **S1에서 찾은 의심 2개:** ① `write` 반환값 무시 (응답이 잘릴 수 있음) ② 머리가 8192바이트를 넘으면 설명 없이 끊음 (431/400 응답 필요) ③ **(S4에서 찾음) Content-Length보다 적게 보내고 가만히 있으면 영원히 안 닫힘 → 1024개면 연결 칸이 바닥 (Slowloris) → timeout 필요** | 자원-1~5 | ASan 에러 0, 클라이언트가 중간에 끊어도 서버 생존 | ⬜ |
+| S6 | 자원·종료: 끊김 처리, SIGPIPE, SIGINT/SIGTERM, 이상한 요청. **S1에서 찾은 의심 2개:** ① `write` 반환값 무시 (응답이 잘릴 수 있음) ② 머리가 8192바이트를 넘으면 설명 없이 끊음 (431/400 응답 필요) ③ **(S4에서 찾음) Content-Length보다 적게 보내고 가만히 있으면 영원히 안 닫힘 → 1024개면 연결 칸이 바닥 (Slowloris) → timeout 필요** / **진훈 요청: 느린 클라이언트 1,100개를 붙여서 연결 칸이 바닥나는 걸 직접 보기 (timeout 전 → 후 비교)** — ③-a timeout 전 관찰 ✅ 11/24 (연결됨 1019, 꽉 참 82, curl reset) / ③-b timeout 구현 ⬜ (막힌 곳: `epoll_wait` 마지막 인자 `-1` → `1000`, 반환값 n이 0일 때) | 자원-1~5 | ASan 에러 0, 클라이언트가 중간에 끊어도 서버 생존 / 1,100개 붙여도 5초 뒤 C 성공 | 🔶 ③-a ✅ |
 | S7 | ④ 하이브리드 (epoll + 코어 수만큼 스레드) + keep-alive | 연결-6, HTTP-6 | 부하 테스트에서 스레드 1개 대비 처리량 비교 | ⬜ |
 | S8 | 마무리: Makefile, CLI 인자, 단위·기능·부하·메모리 테스트 정리, README | 제출-1~6 | `make test` 한 번에 전부 통과 | ⬜ |
 

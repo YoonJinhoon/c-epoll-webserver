@@ -39,6 +39,7 @@ static const char  *g_root;           /* 정적 파일 루트 폴더 (예: "www"
 static void conn_open(int epfd, int fd)
 {
     if (fd >= MAX_FDS) {                      /* 표에 자리가 없음 */
+        printf("[fd %d] 연결 칸(MAX_FDS %d) 꽉 참 -> 바로 close\n", fd, MAX_FDS);
         close(fd);
         return;
     }
@@ -311,6 +312,8 @@ int main(int argc, char **argv)
                 int conn_fd = accept(listen_fd, NULL, NULL);
                 if (conn_fd >= 0)
                     conn_open(epfd, conn_fd);
+                else
+                    perror("accept 실패");    /* 실패 이유(errno)를 글자로 출력 */
             } else if (fd < MAX_FDS && conns[fd] != NULL) {
                 conn_on_data(epfd, conns[fd]);
             }
