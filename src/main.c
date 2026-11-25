@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
@@ -23,12 +24,14 @@
 #define MAX_FDS     1024    /* 이 번호 이상의 fd 는 받지 않는다 (보관함 표 크기) */
 #define BUF_SIZE    8192    /* 보관함 하나의 크기 = 요청 머리 최대 길이 */
 #define MAX_EVENTS  64
+#define IDLE_TIMEOUT 30      /* 이 초 동안 아무것도 안 보낸 연결은 닫는다 (S6 Slowloris 대비) */
 
 /* 연결 하나의 보관함 */
 struct conn {
     int    fd;              /* 어느 연결의 보관함인가 */
     char   buf[BUF_SIZE];   /* 지금까지 도착한 조각들을 이어 붙인 것 */
     size_t len;             /* 지금까지 모인 바이트 수 = 다음 조각을 붙일 위치 */
+    time_t last_active;     /* 마지막으로 무언가 도착한 시각 (초). 연결될 때 + 조각 올 때마다 갱신 */
 };
 
 static struct conn *conns[MAX_FDS];   /* fd 번호로 보관함을 찾는 표 */
@@ -49,6 +52,7 @@ static void conn_open(int epfd, int fd)
         return;
     }
     c->fd = fd;
+    c->last_active = time(NULL);              /* 지금 시각 (초) */
     conns[fd] = c;
 
     struct epoll_event ev = { .events = EPOLLIN, .data.fd = fd };
@@ -193,6 +197,7 @@ static void conn_on_data(int epfd, struct conn *c)
         return;
     }
     c->len += (size_t)n;
+    c->last_active = time(NULL);              /* 조각이 왔으니 "조용한 시간"을 0부터 다시 */
     printf("[fd %d] 조각 %zd 바이트 도착 -> 보관함 %zu 바이트\n", c->fd, n, c->len);
 
     size_t head = request_head_end(c->buf, c->len);
@@ -305,7 +310,7 @@ int main(int argc, char **argv)
 
     struct epoll_event events[MAX_EVENTS];
     for (;;) {
-        int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
+        int n = epoll_wait(epfd, events, MAX_EVENTS, 1000);
         for (int i = 0; i < n; i++) {
             int fd = events[i].data.fd;
             if (fd == listen_fd) {
@@ -316,6 +321,18 @@ int main(int argc, char **argv)
                     perror("accept 실패");    /* 실패 이유(errno)를 글자로 출력 */
             } else if (fd < MAX_FDS && conns[fd] != NULL) {
                 conn_on_data(epfd, conns[fd]);
+            }
+        }
+
+        /* 깰 때마다(최대 1초마다) 모든 보관함을 훑어서, 오래 조용한 연결을 닫는다 */
+        time_t now = time(NULL);
+        for (int fd = 0; fd < MAX_FDS; fd++) {
+            struct conn *c = conns[fd];
+            if (c == NULL)                        /* 이 번호엔 연결이 없음 */
+                continue;
+            if ( IDLE_TIMEOUT <= now - c->last_active ) {
+                printf("[fd %d] %d초 동안 조용함 -> timeout\n", fd, IDLE_TIMEOUT);
+                conn_close(epfd, c);
             }
         }
     }
