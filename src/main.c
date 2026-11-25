@@ -179,6 +179,44 @@ static void serve_file(struct conn *c, const char *path)
     printf("[fd %d] 파일 %s (%lld 바이트) 보냄 -> 200\n", c->fd, file, (long long)st.st_size);
 }
 
+/* ---------- S5: 백엔드에 넘기고 받은 답을 그대로 돌려주기 (Reverse Proxy) ---------- */
+
+#define BACKEND_PORT 8001
+
+/* 요청(c->buf 의 앞 len 바이트)을 백엔드에 그대로 보내고,
+ * 백엔드가 보낸 응답을 끝까지 받아서 클라이언트에게 그대로 전달한다.
+ * 백엔드에 연결할 수 없으면 502. */
+static void proxy_to_backend(struct conn *c, size_t len)
+{
+    /* 1. 백엔드에 연결 (우리 서버가 이번엔 "클라이언트"가 된다) */
+    int bfd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(BACKEND_PORT) };
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    if (bfd < 0 || connect(bfd, (struct sockaddr *)&addr, sizeof addr) < 0) {
+        printf("[fd %d] 백엔드 %d 에 연결 실패 -> 502\n", c->fd, BACKEND_PORT);
+        send_response(c, 502, "Bad Gateway", "backend unavailable\n");
+        if (bfd >= 0)
+            close(bfd);
+        return;
+    }
+    printf("[fd %d] 백엔드 %d 에 연결 (백엔드 쪽 fd %d) -> 요청 %zu 바이트 전달\n",
+           c->fd, BACKEND_PORT, bfd, len);
+
+    /* 2. 받은 요청을 그대로 백엔드에 보낸다 */
+    write_all(bfd, c->buf, len);
+
+    /* 3. 백엔드의 응답을 받는 대로 클라이언트에게 넘긴다. 백엔드가 닫으면(read 0) 끝 */
+    char chunk[4096];
+    ssize_t n;
+    size_t total = 0;
+    while ((n = read(bfd, chunk, sizeof chunk)) > 0) {
+        write_all(c->fd, chunk, (size_t)n);
+        total += (size_t)n;
+    }
+    printf("[fd %d] 백엔드 응답 %zu 바이트를 그대로 전달\n", c->fd, total);
+    close(bfd);
+}
+
 /* ---------- 조각 하나가 도착했을 때 ---------- */
 
 static void conn_on_data(int epfd, struct conn *c)
@@ -219,7 +257,12 @@ static void conn_on_data(int epfd, struct conn *c)
     } else if (strcmp(rl.method, "GET") == 0) {
         /* S3: GET 은 파일을 찾아서 보낸다 */
         printf("[fd %d] 파싱 성공: method=%s path=%s\n", c->fd, rl.method, rl.path);
-        serve_file(c, rl.path);
+        /* S5: 주소가 /api/ 로 시작하면 백엔드로, 아니면 지금처럼 파일 */
+        if ( strncmp(rl.path, "/api/", 5) == 0 ) {
+            proxy_to_backend(c, head);
+        } else {
+            serve_file(c, rl.path);
+        }
     } else {
         /* S4: POST 는 본문을 Content-Length 만큼 끝까지 모은 뒤에 처리한다 */
         long clen = request_content_length(c->buf, head);

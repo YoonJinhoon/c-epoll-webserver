@@ -34,6 +34,8 @@
 | 11/24 | HTTP-4 | (진훈 작성: 본문 다 모였나 조건) `POST /echo` Content-Length 8: 한 번에 → name=jin / `nam`만 → 응답 없음, `e=jin` 뒤 → name=jin | `bash tests/test_post_body.sh ./webserver` (진훈 코드 전: ①② FAIL 확인) | 1차 `clen != c->len + head` → 둘 다 응답 없음 FAIL (숫자 넣어 따라가서 원인 찾음: 8 != 132 참 → 영원히 기다림) → `c->len < head + (size_t)clen` → ①② PASS | 진훈 |
 | 11/24 | 자원 (S6-a, timeout 전) | 느린 클라이언트(nc) 1,100개 + curl 1개 → C가 응답을 못 받아야 함 | 터미널 3개 수동: `./webserver 9100 www \| tee /tmp/s6.log` / bash에서 nc 1,100개 / `curl -v`, `grep -c` | `pgrep -c nc` 1100, `연결됨` **1019** (예측 1019 ✅), `꽉 참` **82** (= 81 + curl, 전부 fd 1024), curl `(56) Connection reset by peer` → **C 거절 확인** | 진훈 |
 | 11/25 | 자원 (S6-b, timeout 후) | (진훈 작성 조건 `IDLE_TIMEOUT <= now - c->last_active`, 30초) nc 1,100개 붙인 직후 curl 실패 → 40초 뒤 curl 200 → timeout 줄 1019 | 터미널 3개 수동, `grep -c "30초 동안" /tmp/s6.log` | 직후 `(56) reset by peer` / 40초 뒤 `HTTP/1.1 200 OK` / **1019** (세 예측 모두 일치). 과정: 1차 조건 `>=` 반대 → `<=` / 5초일 땐 1,100개 띄우는 동안 앞쪽이 먼저 닫혀 꽉 차지 않음(timeout 1100) → 30초로 늘려 재실험 | 진훈 |
+| 11/25 | 프록시-1 (S5-b) | (진훈 작성 조건 `strncmp(rl.path, "/api/", 5) == 0`) `GET /api/hello`를 9100에 보내면 8001 백엔드의 응답이 그대로 온다 | 터미널 A 서버 9100 / B `python3 -m http.server 8001 -d /tmp/b1` / C `curl -i localhost:9100/api/hello` | 본문 `8001 백엔드가 처리함`, 헤더 `Server: SimpleHTTP/0.6 Python` + `HTTP/1.0` (우리 서버가 만든 응답이 아니라는 증거), 로그 `백엔드 8001 에 연결 (백엔드 쪽 fd 6) -> 요청 86 바이트 전달` / `응답 228 바이트를 그대로 전달` | 진훈 |
+| 11/25 | 프록시 (S5-c) | 백엔드를 끄면 9100의 `/api/hello`는 502 | B에서 Ctrl+C → C `curl -i localhost:9100/api/hello` | `HTTP/1.1 502 Bad Gateway`, 본문 `backend unavailable`, 로그 `백엔드 8001 에 연결 실패 -> 502` (진훈 예측 "응답 없음" ❌ → 502 처리 코드가 없었다면 일어났을 일) | 진훈 |
 
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
