@@ -18,6 +18,7 @@
 #include <arpa/inet.h>
 #include <sys/epoll.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #include "request.h"
 
@@ -182,6 +183,7 @@ static void serve_file(struct conn *c, const char *path)
 /* ---------- S5: 백엔드에 넘기고 받은 답을 그대로 돌려주기 (Reverse Proxy) ---------- */
 
 #define BACKEND_PORT 8001
+#define BACKEND_TIMEOUT 3   /* 백엔드 응답을 기다리는 최대 초 (넘으면 504) */
 
 /* 요청(c->buf 의 앞 len 바이트)을 백엔드에 그대로 보내고,
  * 백엔드가 보낸 응답을 끝까지 받아서 클라이언트에게 그대로 전달한다.
@@ -202,6 +204,11 @@ static void proxy_to_backend(struct conn *c, size_t len)
     printf("[fd %d] 백엔드 %d 에 연결 (백엔드 쪽 fd %d) -> 요청 %zu 바이트 전달\n",
            c->fd, BACKEND_PORT, bfd, len);
 
+    /* S5-e: fd 6 에서 read 할 때 최대 BACKEND_TIMEOUT 초만 기다리게 한다.
+     * 그 안에 아무것도 안 오면 read 가 -1 을 돌려주고 블로킹이 풀린다. */
+    struct timeval tv = { .tv_sec = BACKEND_TIMEOUT, .tv_usec = 0 };
+    setsockopt(bfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+
     /* 2. 받은 요청을 그대로 백엔드에 보낸다 */
     write_all(bfd, c->buf, len);
 
@@ -213,7 +220,13 @@ static void proxy_to_backend(struct conn *c, size_t len)
         write_all(c->fd, chunk, (size_t)n);
         total += (size_t)n;
     }
-    printf("[fd %d] 백엔드 응답 %zu 바이트를 그대로 전달\n", c->fd, total);
+    /* S5-e: 반복문이 끝났다 = 백엔드가 닫았거나(0), 3초 동안 아무것도 안 와서 포기했거나(-1) */
+    if ( total == 0 ) {
+        printf("[fd %d] 백엔드가 %d초 안에 응답 없음 -> 504\n", c->fd, BACKEND_TIMEOUT);
+        send_response(c, 504, "Gateway Timeout", "backend timeout\n");
+    } else {
+        printf("[fd %d] 백엔드 응답 %zu 바이트를 그대로 전달\n", c->fd, total);
+    }
     close(bfd);
 }
 

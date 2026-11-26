@@ -36,6 +36,8 @@
 | 11/25 | 자원 (S6-b, timeout 후) | (진훈 작성 조건 `IDLE_TIMEOUT <= now - c->last_active`, 30초) nc 1,100개 붙인 직후 curl 실패 → 40초 뒤 curl 200 → timeout 줄 1019 | 터미널 3개 수동, `grep -c "30초 동안" /tmp/s6.log` | 직후 `(56) reset by peer` / 40초 뒤 `HTTP/1.1 200 OK` / **1019** (세 예측 모두 일치). 과정: 1차 조건 `>=` 반대 → `<=` / 5초일 땐 1,100개 띄우는 동안 앞쪽이 먼저 닫혀 꽉 차지 않음(timeout 1100) → 30초로 늘려 재실험 | 진훈 |
 | 11/25 | 프록시-1 (S5-b) | (진훈 작성 조건 `strncmp(rl.path, "/api/", 5) == 0`) `GET /api/hello`를 9100에 보내면 8001 백엔드의 응답이 그대로 온다 | 터미널 A 서버 9100 / B `python3 -m http.server 8001 -d /tmp/b1` / C `curl -i localhost:9100/api/hello` | 본문 `8001 백엔드가 처리함`, 헤더 `Server: SimpleHTTP/0.6 Python` + `HTTP/1.0` (우리 서버가 만든 응답이 아니라는 증거), 로그 `백엔드 8001 에 연결 (백엔드 쪽 fd 6) -> 요청 86 바이트 전달` / `응답 228 바이트를 그대로 전달` | 진훈 |
 | 11/25 | 프록시 (S5-c) | 백엔드를 끄면 9100의 `/api/hello`는 502 | B에서 Ctrl+C → C `curl -i localhost:9100/api/hello` | `HTTP/1.1 502 Bad Gateway`, 본문 `backend unavailable`, 로그 `백엔드 8001 에 연결 실패 -> 502` (진훈 예측 "응답 없음" ❌ → 502 처리 코드가 없었다면 일어났을 일) | 진훈 |
+| 11/25 | 프록시-4 버그 (S5-d) | 대답 안 하는 백엔드(`nc -l 8001`) + 다른 클라이언트 D의 `/index.html` | A 서버 / B `nc -l 8001` / C `curl /api/hello` / D `curl --max-time 5 /index.html` | D `(28) timed out ... 0 bytes`, A 로그에 D의 `연결됨` 없음 → `read(fd 6)` 블로킹으로 서버 전체 멈춤 (진훈 예측 "D는 받는다" ❌) | 진훈 |
+| 11/26 | 프록시-4 (S5-e) | (진훈 작성 조건 `total == 0`, 백엔드 read 3초 제한) 같은 실험에서 C는 3초 뒤 504, D는 그 뒤 200 | S5-d와 같음 | C `HTTP/1.1 504 Gateway Timeout`, D `HTTP/1.1 200 OK`, 로그 `백엔드가 3초 안에 응답 없음 -> 504` 다음에 D `연결됨` (예측 둘 다 일치). 과정: 저장 전에 make → 빈칸 버전 → 저장 후 make | 진훈 |
 
 ## 테스트의 한계 기록
 | 날짜 | 테스트 | 증명 못 하는 것 |
